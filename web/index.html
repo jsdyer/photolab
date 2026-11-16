@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="description" content="Inspect, crop, compare and export photos in your browser. Your images stay on your device.">
+  <title>Photo Lab · CoolCode</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <header class="mast">
+    <div class="wrap">
+      <nav><a class="brand" href="https://coolcode.ca/"><b>&gt;_</b> CoolCode.ca</a><span>Local image tools</span></nav>
+      <div class="hero">
+        <div><h1>Photo Lab.</h1><p>Inspect what your camera recorded. Crop, resize and export a clean copy.</p></div>
+        <p class="local">Image processing stays in this tab. No uploads or third-party requests.</p>
+      </div>
+    </div>
+  </header>
+  <main class="wrap">
+    <section class="panel drop" id="drop" aria-labelledby="choose-label">
+      <h2 id="choose-label">Open or drop a photo</h2>
+      <p class="muted">JPEG or PNG · up to 48 MiB and 52 megapixels</p>
+      <div class="row">
+        <input type="file" id="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" aria-label="Choose JPEG or PNG" hidden>
+        <button type="button" class="primary" id="choose">Choose photo</button>
+        <button type="button" id="sample">Try sample</button>
+        <button type="button" id="clear" hidden>Clear photo</button>
+      </div>
+      <p id="status" role="status">Ready.</p>
+    </section>
+    <div id="workbench" hidden>
+      <section class="panel">
+        <div class="row between"><h2 id="filename"></h2><span id="summary" class="mono"></span></div>
+        <div class="views">
+          <div><h3>Original · drag to crop</h3><div class="canvas-zone"><canvas id="original" role="img" aria-label="Original photo and selected crop. Use the numeric fields for keyboard crop controls."></canvas></div></div>
+          <div><h3>Export preview</h3><div class="canvas-zone"><canvas id="preview" role="img" aria-label="Preview of the cropped and resized image"></canvas></div></div>
+        </div>
+        <div class="fields">
+          <label>Crop X <input type="number" id="x" min="0" step="1"></label>
+          <label>Crop Y <input type="number" id="y" min="0" step="1"></label>
+          <label>Crop width <input type="number" id="width" min="1" step="1"></label>
+          <label>Crop height <input type="number" id="height" min="1" step="1"></label>
+          <label>Export width <input type="number" id="out-width" min="1" step="1"></label>
+          <label>Export height <input type="number" id="out-height" min="1" step="1"></label>
+          <label>Export format <select id="format"><option value="image/jpeg">JPEG</option><option value="image/png">PNG</option></select></label>
+          <label id="quality-label">JPEG quality <input type="range" id="quality" min="40" max="100" value="92"></label>
+        </div>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="lock" checked> Keep crop aspect ratio</label>
+          <button type="button" id="reset">Reset crop and size</button>
+          <button type="button" class="primary" id="export">Download clean image</button>
+          <p class="muted" id="export-size"></p>
+        </div>
+      </section>
+      <div class="columns">
+        <section class="panel">
+          <div class="row between"><h2>Pixel histogram</h2><label>Channel <select id="channel"><option value="luma">Luminance</option><option value="red">Red</option><option value="green">Green</option><option value="blue">Blue</option></select></label></div>
+          <canvas id="histogram" role="img" aria-label="Pixel histogram for current export preview"></canvas>
+          <p id="hist-summary" class="mono"></p>
+          <p class="muted">Sampled from the export preview. Fully transparent pixels are excluded.</p>
+        </section>
+        <section class="panel">
+          <h2>Original metadata</h2>
+          <dl id="metadata"></dl>
+          <div class="row"><button id="hash" type="button">Calculate SHA-256</button><button id="report" type="button">Download report JSON</button></div>
+          <p class="mono" id="digest" aria-live="polite"></p>
+        </section>
+      </div>
+    </div>
+    <details class="panel"><summary>Privacy and export details</summary><p>Photo Lab reads selected EXIF tags and decodes pixels locally. The exported JPEG or PNG carries the new pixels without the original EXIF, GPS or camera metadata. JPEG fills transparent regions in white. Export dimensions are capped at 8,192 pixels per side and 24 megapixels. A JSON report may include sensitive GPS coordinates present in the original.</p></details>
+  </main>
+  <footer><div class="wrap"><span>CoolCode · Photo Lab</span><a href="https://github.com/jsdyer/photolab">Source code</a></div></footer>
+</body>
+</html>
