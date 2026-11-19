@@ -3,9 +3,10 @@ import csv
 import io
 import os
 import sys
+import re
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 url = sys.argv[1]
@@ -17,19 +18,19 @@ with sync_playwright() as playwright:
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(url)
         page.locator("#sample").click()
-        page.wait_for_function("document.getElementById('filename').textContent.includes('Earthrise')")
+        expect(page.locator("#filename")).to_have_text(re.compile("Earthrise"))
         assert "640 × 640" in page.locator("#summary").inner_text()
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
 
         page.locator("#file").set_input_files([
             ROOT / "tests/fixtures/exif.png", ROOT / "web/earthrise.jpg", ROOT / "README.md",
         ])
-        page.wait_for_function("document.getElementById('filename').textContent === 'exif.png'")
+        expect(page.locator("#filename")).to_have_text("exif.png")
         assert page.locator("#inventory tr").count() == 3
         summary = page.locator("#inventory-summary").inner_text()
         assert "2 of 3 files" in summary and "1 with EXIF coordinates" in summary
         page.get_by_role("button", name="earthrise.jpg", exact=True).click()
-        page.wait_for_function("document.getElementById('filename').textContent === 'earthrise.jpg'")
+        expect(page.locator("#filename")).to_have_text("earthrise.jpg")
         with page.expect_download() as download:
             page.locator("#inventory-download").click()
         rows = list(csv.DictReader(io.StringIO(Path(download.value.path()).read_text())))
