@@ -60,7 +60,8 @@ function readTiff(view) {
   return {
     camera: [primary[0x010f], primary[0x0110]].filter(Boolean).join(' '),
     lens: camera[0xa434],
-    captured: camera[0x9003] || primary[0x0132],
+    captured: camera[0x9003],
+    modified: primary[0x0132],
     offset: camera[0x9011],
     orientation: primary[0x0112],
     focalLength: camera[0x920a],

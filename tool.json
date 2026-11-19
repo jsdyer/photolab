@@ -1,0 +1,26 @@
+{
+  "id": "photolab",
+  "title": "Photo Lab",
+  "description": "Compare photo metadata across a collection, crop individual images and export clean copies.",
+  "category": "field-kit",
+  "tags": [
+    "exif",
+    "jpeg",
+    "png",
+    "gps",
+    "crop",
+    "privacy",
+    "photo",
+    "image",
+    "histogram"
+  ],
+  "icon": "camera",
+  "url": "/photolab/",
+  "source": "https://github.com/jsdyer/photolab",
+  "hosting": "project",
+  "access": "browser",
+  "data_info": {
+    "mode": "local",
+    "detail": "Your JPEG and PNG files stay on this device. The included Apollo 8 photograph comes from NASA."
+  }
+}

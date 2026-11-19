@@ -1,5 +1,7 @@
 import {histogram, inspect, maxBytes, normalizeCrop} from './image.mjs';
 
+import {hasGps, inventoryCsv} from './inventory.mjs';
+
 const $ = id => document.getElementById(id);
 const cropFields = ['x','y','width','height'];
 const formatBytes = bytes => (bytes / (1024 * 1024)).toFixed(2) + ' MiB';
@@ -10,6 +12,8 @@ let photo = null;
 let crop = null;
 let start = null;
 let generation = 0;
+let batchGeneration = 0;
+let entries = [];
 let pendingPaint = 0;
 let analysis = null;
 let output = {width:0, height:0};
@@ -65,6 +69,10 @@ function setCrop(rectangle) {
 
 function clear() {
   generation++;
+  batchGeneration++;
+  entries = [];
+  $('collection').hidden = true;
+  $('inventory').replaceChildren();
   photo?.bitmap.close();
   photo = null;
   crop = null;
@@ -77,20 +85,22 @@ function clear() {
   status('Ready.');
 }
 
-async function load(filePromise) {
+async function load(filePromise, knownMetadata = null) {
   const ticket = ++generation;
   $('clear').hidden = false;
   status('Opening photo locally…');
   try {
     const file = await filePromise;
     if (file.size > maxBytes) throw new Error('Choose an image smaller than 48 MiB.');
-    const buffer = await file.arrayBuffer();
-    const meta = inspect(buffer);
+    const meta = knownMetadata ?? inspect(await file.arrayBuffer());
     const bitmap = await createImageBitmap(file, {imageOrientation:'from-image'});
     if (ticket !== generation) {bitmap.close();return;}
     photo?.bitmap.close();
     photo = {file, meta, bitmap};
     start = null;
+    for (const button of $('inventory').querySelectorAll('button')) {
+      button.setAttribute('aria-pressed', String(entries[Number(button.dataset.index)]?.file === file));
+    }
     $('workbench').hidden = false;
     $('filename').textContent = file.name;
     $('summary').textContent = meta.format + ' · ' + bitmap.width + ' × ' + bitmap.height + ' px · ' + formatBytes(file.size);
@@ -120,7 +130,7 @@ function renderMetadata() {
     ['Format', info.format], ['Stored dimensions', info.width + ' × ' + info.height + ' px'],
     ['Camera', exif.camera], ['Lens', exif.lens],
     ['Captured', exif.captured ? [exif.captured, exif.offset].filter(Boolean).join(' ') : null],
-    ['Exposure', exp], ['Aperture', exif.fNumber > 0 ? 'f/' + exif.fNumber : null],
+    ['EXIF modified', exif.modified], ['Exposure', exp], ['Aperture', exif.fNumber > 0 ? 'f/' + exif.fNumber : null],
     ['ISO', exif.iso], ['Focal length',units(exif.focalLength,' mm')],
     ['Exif orientation',exif.orientation], ['Software',exif.software], ['GPS coordinates',gps || 'Absent from selected EXIF fields']
   ];
@@ -228,24 +238,83 @@ function download(blob, fileName) {
 
 const safeBase = file => file.name.replace(/\.[^.]+$/, '').replace(/[\\/:*?"<>|]/g,'-') || 'photo';
 
+function showInventory() {
+  $('collection').hidden = entries.length < 2;
+  const rows = entries.map(({file, meta, error}, index) => {
+    const row = document.createElement('tr');
+    const filename = row.insertCell();
+    if (error) {
+      filename.textContent = file.name;
+      const message = row.insertCell();
+      message.colSpan = 4;
+      message.textContent = error;
+      return row;
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = file.name;
+    button.dataset.index = index;
+    button.setAttribute('aria-pressed', 'false');
+    button.addEventListener('click', () => load(file, meta));
+    filename.append(button);
+    for (const value of [meta.width + ' × ' + meta.height, meta.exif.camera,
+      [meta.exif.captured, meta.exif.offset].filter(Boolean).join(' '), hasGps(meta) ? 'Present' : 'Absent']) {
+      row.insertCell().textContent = value || '—';
+    }
+    return row;
+  });
+  $('inventory').replaceChildren(...rows);
+  const inspected = entries.filter(entry => entry.meta);
+  const gpsCount = inspected.filter(entry => hasGps(entry.meta)).length;
+  $('inventory-summary').textContent = inspected.length + ' of ' + entries.length + ' files inspected · ' + gpsCount + ' with EXIF coordinates';
+}
+
+async function openFiles(files) {
+  if (!files.length) return;
+  if (files.length > 100) {
+    status('Choose up to 100 photos at a time.', true);
+    return;
+  }
+  clear();
+  const ticket = batchGeneration;
+  $('clear').hidden = false;
+  for (const file of files) {
+    status('Reading file ' + (entries.length + 1) + ' of ' + files.length + '…');
+    const entry = {file};
+    try {
+      if (file.size > maxBytes) throw new Error('Exceeds 48 MiB.');
+      entry.meta = inspect(await file.arrayBuffer());
+    } catch (error) {
+      entry.error = error.message || 'Unreadable file.';
+    }
+    if (ticket !== batchGeneration) return;
+    entries.push(entry);
+  }
+  showInventory();
+  const first = entries.find(entry => entry.meta);
+  if (first) await load(first.file, first.meta);
+  else status(entries.length === 1 ? entries[0].error : 'No supported photos found in this selection.', true);
+}
+
 $('choose').addEventListener('click', () => $('file').click());
-$('file').addEventListener('change', () => {
-  const file = $('file').files[0];
-  if (file) load(file);
-  $('file').value = '';
-});
+$('file').addEventListener('change', event => openFiles(Array.from(event.target.files)));
 $('clear').addEventListener('click', clear);
-$('sample').addEventListener('click', () => load(fetch('./sample.png', {credentials:'omit'}).then(async response => {
-  if (!response.ok) throw new Error('The example could not load. Choose your own photo instead.');
-  return new File([await response.blob()], 'Synthetic coast.png', {type:'image/png'});
-})));
+$('inventory-download').addEventListener('click', () => {
+  download(new Blob([inventoryCsv(entries)], {type:'text/csv;charset=utf-8'}), 'photo-inventory.csv');
+});
+$('sample').addEventListener('click', () => {
+  clear();
+  load(fetch('./earthrise.jpg', {credentials:'omit'}).then(async response => {
+    if (!response.ok) throw new Error('Earthrise could not open. Choose a photo from your device.');
+    return new File([await response.blob()], 'AS08-14-2383 Earthrise.jpg', {type:'image/jpeg'});
+  }));
+});
 $('drop').addEventListener('dragover', event => {event.preventDefault();$('drop').classList.add('active');});
 $('drop').addEventListener('dragleave', () => $('drop').classList.remove('active'));
 $('drop').addEventListener('drop', event => {
   event.preventDefault();
   $('drop').classList.remove('active');
-  const file = event.dataTransfer.files[0];
-  if (file) load(file);
+  openFiles(Array.from(event.dataTransfer.files));
 });
 for (const field of cropFields) $(field).addEventListener('change', () => {
   if (photo) setCrop(Object.fromEntries(cropFields.map(id => [id,$(id).valueAsNumber])));
