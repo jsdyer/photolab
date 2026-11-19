@@ -133,6 +133,23 @@ export function normalizeCrop(input, imageWidth, imageHeight) {
   return {x,y,width:integer(input.width,1,imageWidth - x),height:integer(input.height,1,imageHeight - y)};
 }
 
+export function adjustPixels(pixels, {exposure, contrast, saturation, warmth}) {
+  const gain = 2 ** exposure;
+  const slope = 1 + contrast / 100;
+  const colour = 1 + saturation / 100;
+  const shift = 0.4 * warmth;
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (!pixels[i+3]) continue;
+    const r = ((pixels[i] * gain - 128) * slope + 128) + shift;
+    const g = (pixels[i+1] * gain - 128) * slope + 128;
+    const b = ((pixels[i+2] * gain - 128) * slope + 128) - shift;
+    const grey = .2126 * r + .7152 * g + .0722 * b;
+    pixels[i] = grey + (r - grey) * colour;
+    pixels[i+1] = grey + (g - grey) * colour;
+    pixels[i+2] = grey + (b - grey) * colour;
+  }
+}
+
 export function histogram(pixels) {
   const luma = Array(256).fill(0), red = luma.slice(), green = luma.slice(), blue = luma.slice();
   let visible = 0, shadows = 0, highlights = 0;

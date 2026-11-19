@@ -1,8 +1,20 @@
-import {histogram, inspect, maxBytes, normalizeCrop} from './image.mjs';
+import {adjustPixels, histogram, inspect, maxBytes, normalizeCrop} from './image.mjs';
 
 import {hasGps, inventoryCsv} from './inventory.mjs';
 
 const $ = id => document.getElementById(id);
+const tones = ['exposure','contrast','saturation','warmth'];
+const adjustments = () => Object.fromEntries(tones.map(key => [key, $(key).valueAsNumber]));
+function resetTones() {
+  for (const key of tones) {
+    $(key).value = 0;
+    $(key + '-value').value = '0';
+  }
+  $('compare-tones').checked = false;
+}
+function cropSize() {
+  return Number($('rotate').value) % 180 ? {width:crop.height, height:crop.width} : crop;
+}
 const cropFields = ['x','y','width','height'];
 const formatBytes = bytes => (bytes / (1024 * 1024)).toFixed(2) + ' MiB';
 const limitSide = 8192, limitPixels = 24_000_000;
@@ -47,8 +59,8 @@ function deriveSize(preferred, requested) {
   let width = preferred === 'width' ? requested : output.width;
   let height = preferred === 'height' ? requested : output.height;
   if ($('lock').checked) {
-    if (preferred === 'height') width = Math.max(1, Math.round(height * crop.width / crop.height));
-    else height = Math.max(1, Math.round(width * crop.height / crop.width));
+    if (preferred === 'height') width = Math.max(1, Math.round(height * cropSize().width / cropSize().height));
+    else height = Math.max(1, Math.round(width * cropSize().height / cropSize().width));
   }
   return fitSize(width, height, limitSide, limitSide, limitPixels);
 }
@@ -56,14 +68,14 @@ function deriveSize(preferred, requested) {
 function resetCrop() {
   crop = {x:0,y:0,width:photo.bitmap.width,height:photo.bitmap.height};
   writeCrop();
-  writeSize(fitSize(crop.width,crop.height,limitSide,limitSide,limitPixels));
+  writeSize(fitSize(cropSize().width,cropSize().height,limitSide,limitSide,limitPixels));
   paintSoon();
 }
 
 function setCrop(rectangle) {
   crop = normalizeCrop(rectangle, photo.bitmap.width, photo.bitmap.height);
   writeCrop();
-  writeSize(fitSize(crop.width,crop.height,limitSide,limitSide,limitPixels));
+  writeSize(fitSize(cropSize().width,cropSize().height,limitSide,limitSide,limitPixels));
   paintSoon();
 }
 
@@ -108,6 +120,10 @@ async function load(filePromise, knownMetadata = null) {
     $('hash').disabled = !globalThis.crypto?.subtle;
     $('format').value = meta.format === 'PNG' ? 'image/png' : 'image/jpeg';
     $('quality-label').hidden = meta.format === 'PNG';
+    resetTones();
+    $('rotate').value = '0';
+    previousAngle = 0;
+    $('mirror').checked = false;
     renderMetadata();
     resetCrop();
     status('Photo opened. Changes apply to the export copy.');
@@ -166,16 +182,36 @@ function drawOriginal() {
   g.strokeRect(left,top,right-left,bottom-top);
 }
 
-function renderPixels(canvas, width, height, mime) {
+function renderPixels(canvas, width, height, mime, originalTones = false) {
   canvasSize(canvas,width,height);
   const g = canvas.getContext('2d', {willReadFrequently:canvas.id === 'preview'});
   g.clearRect(0,0,width,height);
+  const angle = Number($('rotate').value);
+  const drawWidth = angle % 180 ? height : width;
+  const drawHeight = angle % 180 ? width : height;
+  g.save();
+  g.translate(width / 2, height / 2);
+  if ($('mirror').checked) g.scale(-1, 1);
+  g.rotate(angle * Math.PI / 180);
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(photo.bitmap, crop.x, crop.y, crop.width, crop.height, -drawWidth/2, -drawHeight/2, drawWidth, drawHeight);
+  g.restore();
+  const settings = adjustments();
+  if (!originalTones && Object.values(settings).some(value => value !== 0)) {
+    // Process strips to bound the extra pixel buffer on large exports.
+    for (let y = 0; y < height; y += 128) {
+      const pixels = g.getImageData(0, y, width, Math.min(128, height - y));
+      adjustPixels(pixels.data, settings);
+      g.putImageData(pixels, 0, y);
+    }
+  }
   if (mime === 'image/jpeg') {
+    g.save();
+    g.globalCompositeOperation = 'destination-over';
     g.fillStyle = '#fff';
     g.fillRect(0,0,width,height);
+    g.restore();
   }
-  g.imageSmoothingQuality = 'high';
-  g.drawImage(photo.bitmap,crop.x,crop.y,crop.width,crop.height,0,0,width,height);
   return g;
 }
 
@@ -207,7 +243,9 @@ function paintSoon() {
     if (!photo) return;
     drawOriginal();
     const size = fitSize(output.width,output.height,760,470);
-    const g = renderPixels($('preview'),size.width,size.height,$('format').value);
+    const compareTones = $('compare-tones').checked;
+    $('preview-heading').textContent = compareTones ? 'Original tones · edits retained for export' : 'Export preview';
+    const g = renderPixels($('preview'),size.width,size.height,$('format').value,compareTones);
     analysis = histogram(g.getImageData(0,0,size.width,size.height).data);
     drawHistogram();
     $('export-size').textContent = number.format(output.width) + ' × ' + number.format(output.height) + ' px';
@@ -325,6 +363,21 @@ for (const field of ['width','height']) $('out-' + field).addEventListener('chan
   paintSoon();
 });
 $('lock').addEventListener('change', () => {writeSize(deriveSize('width',output.width));paintSoon();});
+for (const key of tones) $(key).addEventListener('input', () => {
+  $(key + '-value').value = key === 'exposure' ? $(key).value + (Math.abs($(key).valueAsNumber) === 1 ? ' stop' : ' stops') : $(key).value;
+  $('compare-tones').checked = false;
+  paintSoon();
+});
+$('reset-tones').addEventListener('click', () => { resetTones(); paintSoon(); });
+$('compare-tones').addEventListener('change', paintSoon);
+$('mirror').addEventListener('change', paintSoon);
+let previousAngle = 0;
+$('rotate').addEventListener('change', () => {
+  const angle = Number($('rotate').value);
+  if ((angle - previousAngle) % 180) writeSize({width:output.height, height:output.width});
+  previousAngle = angle;
+  paintSoon();
+});
 $('reset').addEventListener('click', resetCrop);
 $('format').addEventListener('change', () => {$('quality-label').hidden = $('format').value === 'image/png';paintSoon();});
 $('channel').addEventListener('change', drawHistogram);
@@ -359,7 +412,7 @@ $('hash').addEventListener('click', async () => {
 $('report').addEventListener('click', () => {
   const {meta, file, bitmap, digest} = photo;
   const report = {file:file.name,bytes:file.size,sha256:digest || null,...meta,
-    displayedPixels:{width:bitmap.width,height:bitmap.height}, crop, output};
+    displayedPixels:{width:bitmap.width,height:bitmap.height}, crop, output, edits:{...adjustments(),rotationDegrees:Number($('rotate').value),mirror:$('mirror').checked}};
   download(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}),safeBase(file) + '-report.json');
 });
 

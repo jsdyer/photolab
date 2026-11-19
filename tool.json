@@ -1,7 +1,7 @@
 {
   "id": "photolab",
   "title": "Photo Lab",
-  "description": "Compare photo metadata across a collection, crop individual images and export clean copies.",
+  "description": "Adjust light and colour, crop and resize photos, compare metadata and export clean copies locally.",
   "category": "field-kit",
   "tags": [
     "exif",

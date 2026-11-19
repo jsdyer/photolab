@@ -48,3 +48,14 @@ test('opens the published Apollo 8 JPEG without fabricating camera coordinates',
   assert.deepEqual([meta.format, meta.width, meta.height], ['JPEG', 640, 640]);
   assert.equal(Number.isFinite(meta.exif.longitude), false);
 });
+
+test('light and colour edits preserve alpha, adjust exposed pixels, and produce neutral grayscale', async () => {
+  const {adjustPixels} = await import('../web/image.mjs');
+  const pixels = new Uint8ClampedArray([10,40,80,128, 2,4,6,0]);
+  const neutral = {exposure:0,contrast:0,saturation:0,warmth:0};
+  adjustPixels(pixels,{...neutral,exposure:1});
+  assert.deepEqual([...pixels],[20,80,160,128,2,4,6,0]);
+  adjustPixels(pixels,{...neutral,saturation:-100});
+  assert.equal(pixels[0],pixels[1]);
+  assert.equal(pixels[1],pixels[2]);
+});

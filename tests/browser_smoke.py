@@ -39,6 +39,22 @@ with sync_playwright() as playwright:
 
         page.locator("#width").fill("300")
         page.locator("#width").press("Tab")
+        page.locator("#rotate").select_option("90")
+        assert page.locator("#out-width").input_value() == "640"
+        assert page.locator("#out-height").input_value() == "300"
+        page.locator("#mirror").check()
+        page.locator("#exposure").press("End")
+        expect(page.locator("#exposure-value")).to_have_text("2 stops")
+        page.wait_for_function("document.querySelector('#preview').width === 640")
+        def preview():
+            page.evaluate("() => new Promise(ok => requestAnimationFrame(() => requestAnimationFrame(ok)))")
+            return page.locator("#preview").evaluate("c => c.toDataURL()")
+        edited = preview()
+        page.locator("#compare-tones").check()
+        expect(page.locator("#preview-heading")).to_contain_text("Original tones")
+        assert preview() != edited
+        page.locator("#compare-tones").uncheck()
+        assert preview() == edited
         with page.expect_download() as download:
             page.locator("#export").click()
         assert download.value.suggested_filename == "earthrise-clean.jpg"

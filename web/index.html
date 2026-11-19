@@ -14,7 +14,7 @@
     <div class="wrap">
       <nav><a class="brand" href="https://coolcode.ca/"><b>&gt;_</b> CoolCode.ca</a><span>Local image tools</span></nav>
       <div class="hero">
-        <div><h1>Photo Lab.</h1><p>Inspect what your camera recorded. Crop, resize and export a clean copy.</p></div>
+        <div><h1>Photo Lab.</h1><p>Inspect what your camera recorded. Adjust light and colour, rotate or flip, crop and export a clean copy.</p></div>
         <p class="local">Image processing stays in this tab. No uploads or third-party requests.</p>
       </div>
     </div>
@@ -43,8 +43,18 @@
         <div class="row between"><h2 id="filename"></h2><span id="summary" class="mono"></span></div>
         <div class="views">
           <div><h3>Original · drag to crop</h3><div class="canvas-zone"><canvas id="original" role="img" aria-label="Original photo and selected crop. Use the numeric fields for keyboard crop controls."></canvas></div></div>
-          <div><h3>Export preview</h3><div class="canvas-zone"><canvas id="preview" role="img" aria-label="Preview of the cropped and resized image"></canvas></div></div>
+          <div><h3 id="preview-heading">Export preview</h3><div class="canvas-zone"><canvas id="preview" role="img" aria-label="Preview of the cropped and resized image"></canvas></div></div>
         </div>
+        <fieldset class="adjust"><legend>Light and colour</legend>
+          <div class="fields">
+            <label>Exposure<input type="range" id="exposure" min="-2" max="2" step="0.1" value="0"><output for="exposure" id="exposure-value">0</output></label>
+            <label>Contrast<input type="range" id="contrast" min="-100" max="100" step="1" value="0"><output for="contrast" id="contrast-value">0</output></label>
+            <label>Saturation<input type="range" id="saturation" min="-100" max="100" step="1" value="0"><output for="saturation" id="saturation-value">0</output></label>
+            <label>Warmth<input type="range" id="warmth" min="-100" max="100" step="1" value="0"><output for="warmth" id="warmth-value">0</output></label>
+          </div>
+          <div class="row"><label class="check"><input type="checkbox" id="compare-tones"> Preview original tones</label><button type="button" id="reset-tones">Reset light and colour</button></div>
+        </fieldset>
+        <div class="row"><label>Rotation<select id="rotate"><option value="0">Original orientation</option><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">90° counterclockwise</option></select></label><label class="check"><input type="checkbox" id="mirror"> Flip horizontally in the output</label></div>
         <div class="fields">
           <label>Crop X <input type="number" id="x" min="0" step="1"></label>
           <label>Crop Y <input type="number" id="y" min="0" step="1"></label>
