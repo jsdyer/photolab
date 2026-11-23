@@ -40,7 +40,7 @@ jobs:
           test -x "$CHROMIUM_PATH"
           python3 -m http.server 8000 --bind 127.0.0.1 --directory dist &
           python3 tests/browser_smoke.py http://127.0.0.1:8000/
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
@@ -57,4 +57,4 @@ jobs:
     steps:
       - name: Publish GitHub Pages
         id: publish
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
