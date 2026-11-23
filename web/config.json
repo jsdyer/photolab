@@ -1,0 +1,12 @@
+{
+  "maxFiles": 100,
+  "maxFileMiB": 48,
+  "maxBatchFiles": 20,
+  "maxBatchMiB": 192,
+  "maxMetadataRows": 2000,
+  "maxValueCharacters": 4000,
+  "maxInflatedTextBytes": 1048576,
+  "maxExportSide": 8192,
+  "maxExportPixels": 24000000,
+  "batchJpegQuality": 0.92
+}

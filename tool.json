@@ -1,7 +1,7 @@
 {
   "id": "photolab",
   "title": "Photo Lab",
-  "description": "Adjust light and colour, crop and resize photos, compare metadata and export clean copies locally.",
+  "description": "Inspect photo metadata, compare file hashes, edit images and verify sanitized JPEG/PNG copies or a batch ZIP locally.",
   "category": "field-kit",
   "tags": [
     "exif",
@@ -12,7 +12,11 @@
     "privacy",
     "photo",
     "image",
-    "histogram"
+    "histogram",
+    "metadata",
+    "sha256",
+    "sanitization",
+    "content-credentials"
   ],
   "icon": "camera",
   "url": "/photolab/",
@@ -21,6 +25,6 @@
   "access": "browser",
   "data_info": {
     "mode": "local",
-    "detail": "Your JPEG and PNG files stay on this device. The included Apollo 8 photograph comes from NASA."
+    "detail": "Files stay in your browser. JPEG/PNG exports are re-inspected for metadata; Content Credentials detection does not validate signatures. The included Earthrise photograph comes from NASA."
   }
 }

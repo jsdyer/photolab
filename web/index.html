@@ -23,9 +23,9 @@
   <main class="wrap">
     <section class="panel drop" id="drop" aria-labelledby="choose-label">
       <h2 id="choose-label">Open or drop photos</h2>
-      <p class="muted">Choose up to 100 JPEG or PNG files. Each can be up to 48 MiB and 52 megapixels.</p>
+      <p class="muted" id="file-limits">Choose up to 100 JPEG or PNG files. HEIC can be identified, but is not edited or sanitized here. Each can be up to 48 MiB and 52 megapixels.</p>
       <div class="row">
-        <input type="file" id="file" multiple accept="image/jpeg,image/png,.jpg,.jpeg,.png" aria-label="Choose JPEG or PNG" hidden>
+        <input type="file" id="file" multiple accept="image/jpeg,image/png,image/heic,image/heif,.jpg,.jpeg,.png,.heic,.heif" aria-label="Choose JPEG or PNG" hidden>
         <button type="button" class="primary" id="choose">Choose photos</button>
         <button type="button" id="sample">Open Earthrise</button>
         <button type="button" id="clear" hidden>Clear selection</button>
@@ -88,7 +88,36 @@
         </section>
       </div>
     </div>
-    <details class="panel"><summary>Privacy and export details</summary><p>Photo Lab reads selected EXIF tags and decodes pixels locally. The exported JPEG or PNG carries the new pixels without the original EXIF, GPS or camera metadata. JPEG fills transparent regions in white. Export dimensions are capped at 8,192 pixels per side and 24 megapixels. A JSON report may include sensitive GPS coordinates present in the original.</p></details>
+
+    <section class="panel privacy" id="privacy-desk" hidden aria-labelledby="privacy-title">
+      <div class="row between"><div><p class="eyebrow">INSPECT · VERIFY · COMPARE</p><h2 id="privacy-title">Privacy desk</h2></div><span id="privacy-file" class="mono"></span></div>
+      <p id="privacy-overview"></p>
+      <div class="privacy-findings">
+        <div><h3>EXIF location fields</h3><p id="privacy-gps"></p></div>
+        <div><h3>Content Credentials</h3><p id="privacy-credentials"></p></div>
+        <div><h3>Container inspection</h3><p id="privacy-integrity"></p></div>
+      </div>
+      <p class="muted">EXIF directories, PNG text/time, JPEG comments, XMP and IPTC fields are listed below. Unknown blocks remain visible by type and size; proprietary MakerNotes are shown as bounded raw bytes. Presence of a C2PA/JUMBF container does not validate its signature, author or history. External manifests and watermarks are not checked.</p>
+      <p id="privacy-notes" class="muted"></p>
+      <div class="row"><label>Find a metadata field<input id="privacy-query" type="search" placeholder="GPS, serial, copyright, software…"></label><button id="privacy-report" disabled>Save metadata report</button><button id="privacy-compare" disabled>Compare another file</button><input type="file" id="privacy-other" accept="image/jpeg,image/png,.jpg,.jpeg,.png" hidden></div>
+      <p id="privacy-status" role="status"></p>
+      <p class="muted">Metadata and comparison JSON may contain exact coordinates, names and device identifiers. Keep these reports private when sharing only the sanitized image.</p>
+      <details><summary>Embedded metadata fields</summary><div class="table-scroll"><table><thead><tr><th>Group</th><th>Field</th><th>Recorded value</th></tr></thead><tbody id="privacy-fields"></tbody></table></div><p id="privacy-empty" hidden>No decoded metadata fields. Check container completeness and unknown blocks before drawing conclusions.</p></details>
+      <details><summary>File containers and offsets</summary><div class="table-scroll"><table><thead><tr><th>Container</th><th>Byte offset</th><th>Bytes</th><th>Purpose</th></tr></thead><tbody id="privacy-structure"></tbody></table></div></details>
+      <section id="comparison-panel" class="comparison" hidden>
+        <h3 id="comparison-title">File comparison</h3><p id="comparison-status"></p><p id="comparison-summary"></p>
+        <dl><dt>Original SHA-256</dt><dd id="original-hash" class="mono"></dd><dt>Compared SHA-256</dt><dd id="output-hash" class="mono"></dd></dl>
+        <details><summary>Metadata changes</summary><div class="table-scroll"><table><thead><tr><th>Change</th><th>Field</th><th>Original</th><th>Compared file</th></tr></thead><tbody id="comparison-fields"></tbody></table></div></details>
+        <button id="comparison-report" disabled>Save comparison JSON</button>
+      </section>
+      <section class="comparison" aria-labelledby="bulk-title">
+        <h3 id="bulk-title">Sanitize the selected batch</h3><p id="privacy-limits">Up to 20 files and 192 MiB combined. Whole images are re-encoded sequentially; editor adjustments are not applied to the batch.</p>
+        <p class="muted">Re-encoding strips metadata and Content Credentials. It can change compression and colour. <span id="batch-dimensions">Large images are fitted within 8,192 pixels per side and 24 megapixels.</span> JPEG fills transparency with white. Animated PNG and unsupported files are skipped. Visible names, faces or addresses in pixels remain.</p>
+        <div class="row"><label>Batch output<select id="bulk-format"><option value="same">Keep JPEG / PNG format</option><option value="image/png">PNG</option><option value="image/jpeg">JPEG</option></select></label><label class="check"><input id="neutral-names" type="checkbox" checked> Use neutral filenames</label><button id="bulk-clean" disabled>Prepare sanitized ZIP</button><button id="bulk-cancel" disabled>Cancel batch</button><button id="bulk-download" disabled>Download verified ZIP</button></div>
+        <div class="table-scroll"><table><thead><tr><th>Input</th><th>Result</th><th>Output / reason</th></tr></thead><tbody id="bulk-results"></tbody></table></div>
+      </section>
+    </section>
+    <details class="panel"><summary>Privacy and export details</summary><p>Photo Lab inspects supported metadata containers and decodes pixels locally. Every clean export is scanned again before download. The check requires a complete JPEG/PNG structure with no EXIF, XMP, IPTC, comments/text, C2PA or unknown metadata containers. Basic image structure and colour/rendering parameters remain. It does not inspect visible personal information or steganography. JPEG fills transparent regions in white. Export dimensions are capped at 8,192 pixels per side and 24 megapixels. A JSON report may include sensitive GPS coordinates present in the original. <a href="https://www.w3.org/TR/png/">PNG specification</a> · <a href="https://spec.c2pa.org/specifications/specifications/2.3/specs/C2PA_Specification">C2PA specification</a>.</p></details>
   </main>
   <footer><div class="wrap"><span>CoolCode · Photo Lab</span><a href="https://github.com/jsdyer/photolab">Source code</a> <a href="https://coolcode.ca/report/?tool=photolab" referrerpolicy="no-referrer">Report an issue</a></div></footer>
 </body>

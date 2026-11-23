@@ -4,12 +4,28 @@ import io
 import os
 import sys
 import re
+import json
+import hashlib
+import struct
+import zipfile
 from pathlib import Path
 
 from playwright.sync_api import expect, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 url = sys.argv[1]
+
+def png_chunks(data):
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    at, chunks = 8, []
+    while at + 12 <= len(data):
+        length = struct.unpack(">I", data[at:at + 4])[0]
+        chunks.append(data[at + 4:at + 8])
+        at += length + 12
+        if chunks[-1] == b"IEND":
+            break
+    assert at == len(data)
+    return chunks
 with sync_playwright() as playwright:
     browser = playwright.chromium.launch(executable_path=os.environ.get("CHROMIUM_PATH"))
     for width in (390, 1200):
@@ -29,6 +45,41 @@ with sync_playwright() as playwright:
         assert page.locator("#inventory tr").count() == 3
         summary = page.locator("#inventory-summary").inner_text()
         assert "2 of 3 files" in summary and "1 with EXIF coordinates" in summary
+        expect(page.locator("#privacy-gps")).to_have_text("EXIF GPS fields present")
+        with page.expect_download() as original_report:
+            page.locator("#privacy-report").click()
+        metadata = json.loads(Path(original_report.value.path()).read_text())
+        assert any("GPSLatitude" in field["key"] for field in metadata["rows"])
+        with page.expect_download() as clean_png:
+            page.locator("#export").click()
+        cleaned = Path(clean_png.value.path()).read_bytes()
+        assert set(png_chunks(cleaned)) <= {b"IHDR", b"IDAT", b"IEND", b"sRGB", b"pHYs", b"gAMA", b"cHRM"}
+        expect(page.locator("#comparison-status")).to_contain_text("Verified:")
+        assert page.locator("#original-hash").inner_text() == hashlib.sha256((ROOT / "tests/fixtures/exif.png").read_bytes()).hexdigest()
+        assert page.locator("#output-hash").inner_text() == hashlib.sha256(cleaned).hexdigest()
+        assert page.locator("#original-hash").inner_text() != page.locator("#output-hash").inner_text()
+        with page.expect_download() as comparison_report:
+            page.locator("#comparison-report").click()
+        compared = json.loads(Path(comparison_report.value.path()).read_text())
+        assert compared["verification"]["passed"]
+        assert compared["output"]["metadata"]["metadataContainers"] == 0
+        assert any("GPSLatitude" in row["key"] and row["status"] == "Removed" for row in compared["comparison"]["rows"])
+
+        page.locator("#bulk-clean").click()
+        expect(page.locator("#bulk-download")).to_be_enabled(timeout=15000)
+        assert page.locator("#bulk-results tr").count() == 3
+        with page.expect_download() as bundle:
+            page.locator("#bulk-download").click()
+        with zipfile.ZipFile(bundle.value.path()) as archive:
+            assert archive.testzip() is None
+            assert set(archive.namelist()) == {"photo-001-clean.png", "photo-002-clean.jpg", "verification.json"}
+            manifest = json.loads(archive.read("verification.json"))
+            assert [row["status"] for row in manifest["files"]] == ["Verified", "Verified", "Failed"]
+            assert "GPSLatitude" not in archive.read("verification.json").decode()
+            assert "exif.png" not in archive.read("verification.json").decode()
+            for row in manifest["files"][:2]:
+                assert row["outputSha256"] == hashlib.sha256(archive.read(row["output"])).hexdigest()
+
         page.get_by_role("button", name="earthrise.jpg", exact=True).click()
         expect(page.locator("#filename")).to_have_text("earthrise.jpg")
         with page.expect_download() as download:
@@ -60,7 +111,7 @@ with sync_playwright() as playwright:
         assert download.value.suggested_filename == "earthrise-clean.jpg"
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         page.locator("#clear").click()
-        assert page.locator("#workbench").is_hidden() and page.locator("#collection").is_hidden()
+        assert page.locator("#workbench").is_hidden() and page.locator("#collection").is_hidden() and page.locator("#privacy-desk").is_hidden()
         assert not errors, errors
         page.close()
-print("Verified photo inventory, editor and downloads at 390px and 1200px.")
+print("Verified photo inventory, editor, metadata removal, hash comparisons and batch ZIP at 390px and 1200px.")

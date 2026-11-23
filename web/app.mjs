@@ -1,6 +1,7 @@
 import {adjustPixels, histogram, inspect, maxBytes, normalizeCrop} from './image.mjs';
 
 import {hasGps, inventoryCsv} from './inventory.mjs';
+import {openPrivacy,setPrivacyFiles,clearPrivacy,verifyExport,privacyConfig,cleanEncodedExport} from './privacy-ui.mjs';
 
 const $ = id => document.getElementById(id);
 const tones = ['exposure','contrast','saturation','warmth'];
@@ -80,6 +81,7 @@ function setCrop(rectangle) {
 }
 
 function clear() {
+  clearPrivacy();
   generation++;
   batchGeneration++;
   entries = [];
@@ -103,12 +105,13 @@ async function load(filePromise, knownMetadata = null) {
   status('Opening photo locally…');
   try {
     const file = await filePromise;
-    if (file.size > maxBytes) throw new Error('Choose an image smaller than 48 MiB.');
+    if (file.size > Math.min(maxBytes,privacyConfig().maxFileMiB*1048576)) throw new Error(`Choose an image smaller than ${Math.min(48,privacyConfig().maxFileMiB)} MiB.`);
     const meta = knownMetadata ?? inspect(await file.arrayBuffer());
     const bitmap = await createImageBitmap(file, {imageOrientation:'from-image'});
     if (ticket !== generation) {bitmap.close();return;}
     photo?.bitmap.close();
     photo = {file, meta, bitmap};
+    openPrivacy(file);
     start = null;
     for (const button of $('inventory').querySelectorAll('button')) {
       button.setAttribute('aria-pressed', String(entries[Number(button.dataset.index)]?.file === file));
@@ -309,18 +312,19 @@ function showInventory() {
 
 async function openFiles(files) {
   if (!files.length) return;
-  if (files.length > 100) {
-    status('Choose up to 100 photos at a time.', true);
+  if (files.length > privacyConfig().maxFiles) {
+    status(`Choose up to ${privacyConfig().maxFiles} photos at a time.`, true);
     return;
   }
   clear();
+  setPrivacyFiles(files);
   const ticket = batchGeneration;
   $('clear').hidden = false;
   for (const file of files) {
     status('Reading file ' + (entries.length + 1) + ' of ' + files.length + '…');
     const entry = {file};
     try {
-      if (file.size > maxBytes) throw new Error('Exceeds 48 MiB.');
+      if (file.size > Math.min(maxBytes,privacyConfig().maxFileMiB*1048576)) throw new Error(`Exceeds ${Math.min(48,privacyConfig().maxFileMiB)} MiB.`);
       entry.meta = inspect(await file.arrayBuffer());
     } catch (error) {
       entry.error = error.message || 'Unreadable file.';
@@ -420,12 +424,17 @@ $('export').addEventListener('click', async () => {
   if (!photo || exporting) return;
   exporting = true;
   $('export').disabled = true;
+  const selectedFile = photo.file;
   const canvas = document.createElement('canvas');
   const type = $('format').value, fileName = safeBase(photo.file), quality = Number($('quality').value) / 100;
   try {
     renderPixels(canvas,output.width,output.height,type);
-    const blob = await new Promise(resolve => canvas.toBlob(resolve,type,quality));
+    let blob = await new Promise(resolve => canvas.toBlob(resolve,type,quality));
     if (!blob || blob.type !== type) throw new Error('The browser could not encode the requested format.');
+    blob=await cleanEncodedExport(blob);
+    await verifyExport(selectedFile,blob);
+    if(photo?.file!==selectedFile)return;
+    status('Export verified: metadata containers removed. The comparison includes original and output hashes.');
     download(blob,fileName + '-clean.' + (type === 'image/png' ? 'png' : 'jpg'));
   } catch (error) {
     status(error.message + ' Try a smaller export.',true);
